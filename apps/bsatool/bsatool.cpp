@@ -334,6 +334,9 @@ int main(int argc, char** argv)
             case Bsa::BsaVersion::Uncompressed:
                 return call<Bsa::BSAFile>(info);
             case Bsa::BsaVersion::Compressed:
+            case Bsa::BsaVersion::TES4:
+            case Bsa::BsaVersion::FO3:
+            case Bsa::BsaVersion::SSE:
                 return call<Bsa::CompressedBSAFile>(info);
             case Bsa::BsaVersion::BA2GNRL:
                 return call<Bsa::BA2GNRLFile>(info);

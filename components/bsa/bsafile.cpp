@@ -371,9 +371,22 @@ BsaVersion Bsa::BSAFile::detectVersion(const std::filesystem::path& filePath)
         return BsaVersion::Uncompressed;
     }
 
-    if (head[0] == static_cast<uint32_t>(BsaVersion::Compressed))
+    if (head[0] == static_cast<uint32_t>(BsaVersion::Compressed)) // "BSA\0"
     {
-        return BsaVersion::Compressed;
+        // The second header word holds the "BSA\0" archive version:
+        // 0x67 (103) for Oblivion, 0x68 (104) for Fallout 3, 0x69 (105) for Skyrim SE.
+        // Keep these in sync with CompressedBSAFile::Version.
+        switch (head[1])
+        {
+            case 0x67: // Version_TES4, Oblivion
+                return BsaVersion::TES4;
+            case 0x68: // Version_FO3
+                return BsaVersion::FO3;
+            case 0x69: // Version_SSE
+                return BsaVersion::SSE;
+            default:
+                return BsaVersion::Compressed;
+        }
     }
 
     if (head[0] == ESM::fourCC("BTDX"))

@@ -318,6 +318,17 @@ add_component_dir (files
     istreamptr streamwithbuffer utils
     )
 
+add_component_dir (files/oblivion
+    esm
+    bsa
+    )
+
+add_component_dir (oblivion
+    contentloader
+    mechanics
+    config
+    )
+
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     set_source_files_properties(files/configfileparser.cpp PROPERTIES COMPILE_FLAGS -Wno-shadow)
 endif()

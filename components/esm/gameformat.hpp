@@ -25,6 +25,20 @@ namespace ESM
 
     std::ostream& operator<<(std::ostream& stream, GameFormat format);
 
+    // Morrowind (TES3) plugin header versions, 1.2 and 1.3.
+    constexpr bool isMorrowindVersion(std::uint32_t version)
+    {
+        return version == VER_120 || version == VER_130;
+    }
+
+    // Oblivion (TES4) plugin header version, 0.8.
+    // Note: VER_100 is shared between TES4 and FO4, so it can not be used to disambiguate Oblivion.
+    // Use getGameFormat() to tell TES4 and FO4 files apart.
+    constexpr bool isOblivionVersion(std::uint32_t version)
+    {
+        return version == VER_080;
+    }
+
     // The game format associated with a list of masters.
     std::optional<GameFormat> getGameFormatFromMasters(
         std::span<const MasterData> masters, std::span<const GameFormat> masterFormats = {});

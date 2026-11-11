@@ -64,6 +64,7 @@ The ranges included with each setting are the physically possible ranges, not re
         Map <map>
         Models <models>
         Navigator <navigator>
+        Oblivion <oblivion>
         Physics <physics>
         Post-Processing <postprocessing>
         Shaders <shaders>

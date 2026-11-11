@@ -9,6 +9,7 @@
 #include <components/bsa/ba2gnrlfile.hpp>
 #include <components/bsa/bsafile.hpp>
 #include <components/bsa/compressedbsafile.hpp>
+#include <components/files/oblivion/bsa.hpp>
 
 #include <components/toutf8/toutf8.hpp>
 
@@ -124,6 +125,15 @@ namespace VFS
             case Bsa::BsaVersion::Uncompressed:
                 return std::make_unique<BsaArchive<Bsa::BSAFile>>(path, encoder);
             case Bsa::BsaVersion::Compressed:
+                return std::make_unique<BsaArchive<Bsa::CompressedBSAFile>>(path, encoder);
+            case Bsa::BsaVersion::TES4:
+                // Oblivion archives are handled by the dedicated, validating
+                // Oblivion handler (components/files/oblivion/bsa.hpp), which
+                // also caches extracted contents. FO3/SSE archives keep the
+                // generic TES4-family reader.
+                return std::make_unique<BsaArchive<Files::Oblivion::BsaFile>>(path, encoder);
+            case Bsa::BsaVersion::FO3:
+            case Bsa::BsaVersion::SSE:
                 return std::make_unique<BsaArchive<Bsa::CompressedBSAFile>>(path, encoder);
             case Bsa::BsaVersion::BA2GNRL:
                 return std::make_unique<BsaArchive<Bsa::BA2GNRLFile>>(path, encoder);

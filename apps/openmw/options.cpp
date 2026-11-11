@@ -3,6 +3,7 @@
 #include <components/fallback/validate.hpp>
 #include <components/files/configurationmanager.hpp>
 #include <components/misc/rng.hpp>
+#include <components/oblivion/config.hpp>
 
 namespace
 {
@@ -16,6 +17,7 @@ namespace OpenMW
     {
         bpo::options_description desc("Syntax: openmw <options>\nAllowed options");
         Files::ConfigurationManager::addCommonOptions(desc);
+        Oblivion::addOptions(desc);
 
         auto addOption = desc.add_options();
         addOption("help", "print help message");
