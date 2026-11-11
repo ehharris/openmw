@@ -5,6 +5,8 @@ OpenMW is an open-source open-world RPG game engine that supports playing Morrow
 
 OpenMW also comes with OpenMW-CS, a replacement for Bethesda's Construction Set.
 
+As an experimental work in progress, OpenMW is gaining support for The Elder Scrolls IV: Oblivion (see [Oblivion Support](docs/oblivion-support.md)). Oblivion content can be detected, validated, loaded and mounted, but this is not yet feature-complete and is not recommended for general play.
+
 * Version: 0.53.0
 * License: GPLv3 (see [LICENSE](https://gitlab.com/OpenMW/openmw/-/raw/master/LICENSE) for more information)
 * Website: https://www.openmw.org
@@ -26,7 +28,7 @@ The main quests in Morrowind, Tribunal and Bloodmoon are all completable. Some i
 Pre-existing modifications created for the original Morrowind engine can be hit-and-miss. The OpenMW script compiler performs more thorough error-checking than Morrowind does, meaning that a mod created for Morrowind may not necessarily run in OpenMW. Some mods also rely on quirky behaviour or engine bugs in order to work. We are considering such compatibility issues on a case-by-case basis - in some cases adding a workaround to OpenMW may be feasible, in other cases fixing the mod will be the only option. If you know of any mods that work or don't work, feel free to add them to the [Mod status](https://wiki.openmw.org/index.php?title=Mod_status) wiki page.
 
 Platform Support
-------------------
+----------------
 
 The officially supported platforms at this time are:
 
@@ -37,6 +39,24 @@ The officially supported platforms at this time are:
 We do not support 32-bit platforms.
 
 We welcome efforts to add more supported platforms!
+
+Oblivion Support
+----------------
+
+OpenMW includes experimental support for *The Elder Scrolls IV: Oblivion* (TES4). Oblivion
+plugins and masters (`.esm`/`.esp`) placed on the content list are detected at startup,
+validated (TES4 signature, HEDR version, master availability and load order) and loaded through the
+TES4-family reader. Oblivion BSA archives (version 103) are mounted from the VFS, and the
+`[Oblivion]` section of `settings.cfg` plus the command line options `--oblivion`,
+`--oblivion-validate`, `--oblivion-strict-load-order` and `--oblivion-verbose` control
+the behaviour.
+
+Oblivion support is under active development and is not feature-complete: Oblivion scripts are not
+executed, Oblivion save games and OpenMW-CS editing of Oblivion plugins are unsupported, and most
+Oblivion gameplay rules are not wired into the running engine yet. See
+[docs/oblivion-support.md](docs/oblivion-support.md) for the full documentation, including build
+instructions, detailed configuration, the architecture overview and the complete list of limitations
+and known issues. You need to own Oblivion to use this; OpenMW does not ship any game data.
 
 Getting Started
 ---------------
@@ -54,7 +74,7 @@ Not sure what to do with all your free time? OpenMW is always looking for new co
 The data path
 -------------
 
-The data path tells OpenMW where to find your Morrowind files. If you run the launcher, OpenMW should be able to pick up the location of these files on its own, if both Morrowind and OpenMW are installed properly (installing Morrowind under WINE is considered a proper install).
+The data path tells OpenMW where to find your Morrowind files. If you run the launcher, OpenMW should be able to pick up the location of these files on its own, if both Morrowind and OpenMW are installed properly (installing Morrowind under WINE is considered a proper install). For Oblivion, see [Oblivion Support](#oblivion-support) — Oblivion content is configured manually.
 
 Command line options
 --------------------
@@ -69,6 +89,23 @@ Command line options
       --user-data arg                       set user data directory (used for
                                             saves, screenshots, etc)
       --resources arg (=resources)          set resources directory
+      --oblivion [=arg(=1)] (=0)            force Oblivion (TES4) mode for the
+                                            session: content files that are not
+                                            Oblivion plugins/masters are
+                                            rejected, and Oblivion content
+                                            files are always validated at
+                                            startup
+      --oblivion-validate [=arg(=1)] (=1)   validate Oblivion content files at
+                                            startup (TES4 signature, HEDR
+                                            version, master availability and
+                                            load order)
+      --oblivion-strict-load-order [=arg(=1)] (=0)
+                                            treat missing or misordered
+                                            Oblivion master files as fatal
+                                            errors instead of warnings
+      --oblivion-verbose [=arg(=1)] (=0)    log detailed information about the
+                                            Oblivion content files that are
+                                            loaded
       --help                                print help message
       --version                             print version information and quit
       --data arg (=data)                    set data directories (later directories

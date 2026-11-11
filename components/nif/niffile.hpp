@@ -63,6 +63,25 @@ namespace Nif
         }
     };
 
+    /// Check if the given file version is a Morrowind NIF (4.0.0.2).
+    constexpr bool isMorrowindNIFVersion(std::uint32_t version)
+    {
+        return version == NIFFile::VER_MW;
+    }
+
+    /// Check if the given file version is an Oblivion NIF (10.0.1.2 or 20.0.0.5).
+    constexpr bool isOblivionNIFVersion(std::uint32_t version)
+    {
+        return version == NIFFile::VER_OB_OLD || version == NIFFile::VER_OB;
+    }
+
+    /// Check if the given file version is a generic Gamebryo NIF used by later Bethesda titles
+    /// (Fallout 3, New Vegas, Skyrim) and their derivatives (20.2.0.7).
+    constexpr bool isGamebryoNIFVersion(std::uint32_t version)
+    {
+        return version == NIFFile::VER_BGS;
+    }
+
     class FileView
     {
     public:

@@ -515,6 +515,11 @@ void OMW::Engine::addGroundcoverFile(const std::string& file)
     mGroundcoverFiles.emplace_back(file);
 }
 
+void OMW::Engine::setOblivionConfiguration(const Oblivion::Configuration& configuration)
+{
+    mOblivionConfig = configuration;
+}
+
 void OMW::Engine::setSkipMenu(bool skipMenu, bool newGame)
 {
     mSkipMenu = skipMenu;

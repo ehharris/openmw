@@ -14,6 +14,7 @@
 #include "categories/map.hpp"
 #include "categories/models.hpp"
 #include "categories/navigator.hpp"
+#include "categories/oblivion.hpp"
 #include "categories/physics.hpp"
 #include "categories/postprocessing.hpp"
 #include "categories/saves.hpp"
@@ -55,6 +56,7 @@ namespace Settings
         WaterCategory mWater{ mIndex };
         WindowsCategory mWindows{ mIndex };
         NavigatorCategory mNavigator{ mIndex };
+        OblivionCategory mOblivion{ mIndex };
         ShadowsCategory mShadows{ mIndex };
         PhysicsCategory mPhysics{ mIndex };
         ModelsCategory mModels{ mIndex };
@@ -177,6 +179,11 @@ namespace Settings
     inline NavigatorCategory& navigator()
     {
         return values().mNavigator;
+    }
+
+    inline OblivionCategory& oblivion()
+    {
+        return values().mOblivion;
     }
 
     inline ShadowsCategory& shadows()

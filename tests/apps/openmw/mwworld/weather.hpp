@@ -1,0 +1,510 @@
+#ifndef GAME_MWWORLD_WEATHER_H
+#define GAME_MWWORLD_WEATHER_H
+
+#include <cstdint>
+#include <map>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <osg/Vec4f>
+
+#include <components/esm/refid.hpp>
+#include <components/fallback/fallback.hpp>
+#include <components/vfs/pathutil.hpp>
+
+#include "../mwbase/soundmanager.hpp"
+
+#include "../mwrender/skyutil.hpp"
+
+namespace ESM
+{
+    struct Region;
+    struct RegionWeatherState;
+    class ESMWriter;
+    class ESMReader;
+}
+
+namespace MWRender
+{
+    class RenderingManager;
+}
+
+namespace Loading
+{
+    class Listener;
+}
+
+namespace Fallback
+{
+    class Map;
+}
+
+namespace MWWorld
+{
+    class TimeStamp;
+
+    struct Moon
+    {
+        std::string_view mName;
+        MWRender::MoonState::Phase mPhase;
+        unsigned int mPhaseValue;
+        float mAlpha;
+    };
+
+    enum NightDayMode
+    {
+        Default = 0,
+        ExteriorNight = 1,
+        InteriorDay = 2
+    };
+
+    struct WeatherSetting
+    {
+        float mPreSunriseTime;
+        float mPostSunriseTime;
+        float mPreSunsetTime;
+        float mPostSunsetTime;
+    };
+
+    struct TimeOfDaySettings
+    {
+        float mNightStart;
+        float mNightEnd;
+        float mDayStart;
+        float mDayEnd;
+
+        std::map<std::string, WeatherSetting> mSunriseTransitions;
+
+        float mStarsPostSunsetStart;
+        float mStarsPreSunriseFinish;
+        float mStarsFadingDuration;
+
+        WeatherSetting getSetting(const std::string& type) const
+        {
+            std::map<std::string, WeatherSetting>::const_iterator it = mSunriseTransitions.find(type);
+            if (it != mSunriseTransitions.end())
+            {
+                return it->second;
+            }
+            else
+            {
+                return { 1.f, 1.f, 1.f, 1.f };
+            }
+        }
+
+        void addSetting(const std::string& type)
+        {
+            WeatherSetting setting = { Fallback::Map::getFloat("Weather_" + type + "_Pre-Sunrise_Time"),
+                Fallback::Map::getFloat("Weather_" + type + "_Post-Sunrise_Time"),
+                Fallback::Map::getFloat("Weather_" + type + "_Pre-Sunset_Time"),
+                Fallback::Map::getFloat("Weather_" + type + "_Post-Sunset_Time") };
+
+            mSunriseTransitions[type] = setting;
+        }
+    };
+
+    /// Interpolates between 4 data points (sunrise, day, sunset, night) based on the time of day.
+    /// The template value could be a floating point number, or a color.
+    template <typename T>
+    class TimeOfDayInterpolator
+    {
+    public:
+        explicit TimeOfDayInterpolator()
+            : mSunriseValue()
+            , mDayValue()
+            , mSunsetValue()
+            , mNightValue()
+        {
+        }
+
+        TimeOfDayInterpolator(const T& sunrise, const T& day, const T& sunset, const T& night)
+            : mSunriseValue(sunrise)
+            , mDayValue(day)
+            , mSunsetValue(sunset)
+            , mNightValue(night)
+        {
+        }
+
+        T getValue(const float gameHour, const TimeOfDaySettings& timeSettings, const std::string& prefix) const;
+
+        const T& getSunriseValue() const { return mSunriseValue; }
+        const T& getDayValue() const { return mDayValue; }
+        const T& getSunsetValue() const { return mSunsetValue; }
+        const T& getNightValue() const { return mNightValue; }
+
+        void setSunriseValue(const T& sunriseValue) { mSunriseValue = sunriseValue; }
+        void setDayValue(const T& dayValue) { mDayValue = dayValue; }
+        void setSunsetValue(const T& sunsetValue) { mSunsetValue = sunsetValue; }
+        void setNightValue(const T& nightValue) { mNightValue = nightValue; }
+
+        void blank()
+        {
+            mSunriseValue = {};
+            mDayValue = {};
+            mSunsetValue = {};
+            mNightValue = {};
+        }
+
+    private:
+        T mSunriseValue, mDayValue, mSunsetValue, mNightValue;
+    };
+
+    /// Defines a single weather setting (according to INI)
+    class Weather
+    {
+    public:
+        static std::string_view getRecordType() { return "Weather"; }
+
+        static osg::Vec3f defaultDirection();
+
+        ESM::RefId mId;
+        std::string mName;
+        VFS::Path::Normalized mCloudTexture;
+        VFS::Path::Normalized mParticleEffect;
+        VFS::Path::Normalized mRainEffect;
+
+        // Sound effects
+        // This is used for Blight, Ashstorm and Blizzard (Bloodmoon)
+        ESM::RefId mAmbientLoopSoundID;
+        // This is used for Rain and Thunderstorm
+        ESM::RefId mRainLoopSoundID;
+
+        std::array<ESM::RefId, 4> mThunderSoundID;
+
+        // Sky (atmosphere) color
+        TimeOfDayInterpolator<osg::Vec4f> mSkyColor;
+        // Fog color
+        TimeOfDayInterpolator<osg::Vec4f> mFogColor;
+        // Ambient lighting color
+        TimeOfDayInterpolator<osg::Vec4f> mAmbientColor;
+        // Sun (directional) lighting color
+        TimeOfDayInterpolator<osg::Vec4f> mSunColor;
+
+        // Fog depth/density
+        TimeOfDayInterpolator<float> mLandFogDepth;
+
+        // Color modulation for the sun itself during sunset
+        osg::Vec4f mSunDiscSunsetColor;
+
+        osg::Vec3f mStormDirection;
+        osg::Vec3f mStormParticleRotation;
+        int mScriptId;
+
+        // Used by scripts to animate signs, etc based on the wind (GetWindSpeed)
+        float mWindSpeed;
+
+        // Cloud animation speed multiplier
+        float mCloudSpeed;
+
+        // Value between 0 and 1, defines the strength of the sun glare effect.
+        // Also appears to modify how visible the sun, moons, and stars are for various weather effects.
+        float mGlareView;
+
+        // Fog factor and offset used with distant land rendering.
+        struct
+        {
+            float FogFactor;
+            float FogOffset;
+        } mDL;
+
+        // How fast does rain travel down?
+        // In Morrowind.ini this is set globally, but we may want to change it per weather later.
+        float mRainSpeed;
+
+        // How often does a new rain mesh spawn?
+        float mRainEntranceSpeed;
+
+        // Maximum count of rain particles
+        int mRainMaxRaindrops;
+
+        // Radius of rain effect
+        float mRainDiameter;
+
+        // Transition threshold to spawn rain
+        float mRainThreshold;
+
+        // Height of rain particles spawn
+        float mRainMinHeight;
+        float mRainMaxHeight;
+
+        float mCloudsMaximumPercent;
+        float mTransitionDelta;
+
+        // Note: In MW, only thunderstorms support these attributes, but in the interest of making weather more
+        // flexible, these settings are imported for all weather types. Only thunderstorms will normally have any
+        // non-zero values.
+        float mThunderFrequency;
+        float mThunderThreshold;
+        float mFlashDecrement;
+
+        // Note: For Weather Blight, there is a "Disease Chance" (=0.1) setting. But according to MWSFD this feature
+        // is broken in the vanilla game and was disabled.
+
+        float transitionDelta() const;
+        float cloudBlendFactor(const float transitionRatio) const;
+
+        float calculateThunder(const float transitionRatio, const float elapsedSeconds, const bool isPaused);
+
+        void blank();
+
+    private:
+        float mFlashBrightness;
+
+        void flashDecrement(const float elapsedSeconds);
+        float thunderChance(const float transitionRatio, const float elapsedSeconds) const;
+        void lightningAndThunder(void);
+
+    public:
+        // Is this an ash storm / blight storm? If so, the following will happen:
+        // - The particles and clouds will be oriented so they appear to come from the Red Mountain.
+        // - Characters will animate their hand to protect eyes from the storm when looking in its direction (idlestorm
+        // animation)
+        // - Slower movement when walking against the storm (fStromWalkMult)
+        bool mIsStorm;
+        bool mRipplesEnabled;
+        bool mUseTorches;
+        bool mOcclusionEnabled;
+    };
+
+    class WeatherStore;
+
+    /// A class for storing a region's weather.
+    class RegionWeather
+    {
+    public:
+        explicit RegionWeather(const ESM::Region& region);
+        explicit RegionWeather(const ESM::RegionWeatherState& state);
+
+        operator ESM::RegionWeatherState() const;
+
+        void setChances(const std::map<ESM::RefId, uint8_t>& chances, const WeatherStore& store);
+        const std::map<ESM::RefId, uint8_t>& getChances() const { return mChances; }
+        uint8_t getChance(ESM::RefId weather) const;
+
+        void setWeather(ESM::RefId weatherID);
+
+        ESM::RefId getWeather(const WeatherStore& store);
+
+    private:
+        ESM::RefId mWeather;
+        std::map<ESM::RefId, uint8_t> mChances;
+
+        void chooseNewWeather(const WeatherStore& store);
+    };
+
+    /// A class that acts as a model for the moons.
+    class MoonModel
+    {
+    public:
+        MoonModel(const std::string& name);
+        MoonModel(float fadeInStart, float fadeInFinish, float fadeOutStart, float fadeOutFinish, float axisOffset,
+            float speed, float dailyIncrement, float fadeStartAngle, float fadeEndAngle, float moonShadowEarlyFadeAngle,
+            float sunriseHour, float sunsetHour);
+
+        MWRender::MoonState calculateState(const TimeStamp& gameTime) const;
+
+    private:
+        struct CycleDay
+        {
+            float mRiseHour{};
+            float mHandoverHour{};
+        };
+
+        // Time constant for Morrowind parity.
+        static constexpr float sOneMinute = 0.0167f;
+
+        static constexpr float sRiseHourEpsilon = 1e-4f;
+
+        // The moon repeats itself over this cycle.
+        static constexpr int sDaysPerPhase = 3;
+        static constexpr int sPhasesPerCycle = 8;
+        static constexpr int sDaysPerCycle = sDaysPerPhase * sPhasesPerCycle;
+
+        // This arises from the start date of 16 Last Seed, 427 (with 17 increments).
+        // TODO: Find an alternate formula that doesn't rely on this day being fixed.
+        static constexpr int sStartIncrements = 17;
+
+        float mFadeInStart;
+        float mFadeInFinish;
+        float mFadeOutStart;
+        float mFadeOutFinish;
+        float mAxisOffset;
+        float mSpeed;
+        float mDegreesPerHour;
+        float mDailyIncrement;
+        float mFadeStartAngle;
+        float mFadeEndAngle;
+        float mMoonShadowEarlyFadeAngle;
+        float mSunriseHour;
+        float mSunsetHour;
+
+        CycleDay mCycle[sDaysPerCycle];
+
+        static float hourOfDay(float hours);
+        static int dayOfCycle(int gameDay);
+        static MWRender::MoonState::Phase phase(int gameDay, bool postHandover);
+
+        void calculateSettings();
+        void buildCycle();
+
+        float hoursUntilVisible() const;
+        float hoursUntilInvisible() const;
+        float riseHour(int gameDay) const;
+        float handoverHour(float prevRiseHour, float nextRiseHour) const;
+        float rotation(float hours) const;
+        float angle(float gameHour, float riseHour) const;
+        float shadowBlend(float angle) const;
+        float hourlyAlpha(float gameHour) const;
+        float earlyMoonShadowAlpha(float angle) const;
+    };
+
+    class WeatherStore
+    {
+        std::vector<Weather> mInitial;
+        std::unordered_map<ESM::RefId, Weather> mStatic;
+        std::vector<Weather*> mShared;
+
+    public:
+        WeatherStore() = default;
+        WeatherStore(const WeatherStore&) = delete;
+        WeatherStore& operator=(const WeatherStore&) = delete;
+
+        void reset();
+
+        size_t getSize() const { return mShared.size(); }
+        const Weather* at(size_t index) const { return mShared.at(index); }
+
+        const Weather* search(ESM::RefId id) const;
+        const Weather* find(ESM::RefId id) const;
+        Weather* search(ESM::RefId id);
+
+        Weather* insertStatic(const Weather& item);
+        void eraseStatic(ESM::RefId id);
+
+        auto begin() const { return mShared.begin(); }
+        auto end() const { return mShared.end(); }
+    };
+
+    /// Interface for weather settings
+    class WeatherManager
+    {
+    public:
+        // Have to pass fallback and Store, can't use singleton since World isn't fully constructed yet at the time
+        WeatherManager(
+            MWRender::RenderingManager& rendering, MWWorld::ESMStore& store, MWWorld::WeatherStore& weatherStore);
+        ~WeatherManager();
+
+        /**
+         * Change the weather in the specified region by id of the weather
+         * @param region that should be changed
+         * @param ID of the weather setting to shift to
+         */
+        void changeWeather(ESM::RefId regionID, ESM::RefId weatherID);
+        void modRegion(ESM::RefId regionID, const std::map<ESM::RefId, uint8_t>& chances);
+        const std::map<ESM::RefId, uint8_t>& getRegionChances(ESM::RefId regionID) const;
+        void playerTeleported(const ESM::RefId& playerRegion, bool isExterior);
+
+        /**
+         * Per-frame update
+         * @param duration
+         * @param paused
+         */
+        void update(float duration, bool paused, const TimeStamp& time, bool isExterior);
+
+        void stopSounds();
+
+        float getWindSpeed() const;
+        NightDayMode getNightDayMode() const;
+
+        /// Are we in an ash or blight storm?
+        bool isInStorm() const;
+
+        void advanceTime(double hours, bool incremental);
+
+        const Weather* getWeather() { return mWeatherStore->search(mCurrentWeather); }
+
+        const Weather* getNextWeather() { return mWeatherStore->search(mNextWeather); }
+
+        float getTransitionFactor() const { return mTransitionFactor; }
+
+        bool useTorches(float hour) const;
+
+        float getSunPercentage(float hour) const;
+
+        float getSunVisibility() const;
+
+        std::vector<Moon> getCurrentMoons(const TimeStamp& time) const;
+
+        void write(ESM::ESMWriter& writer, Loading::Listener& progress) const;
+
+        bool readRecord(ESM::ESMReader& reader, uint32_t type);
+
+        void clear();
+
+    private:
+        MWWorld::ESMStore& mStore;
+        MWRender::RenderingManager& mRendering;
+        float mSunriseTime;
+        float mSunsetTime;
+        float mSunriseDuration;
+        float mSunsetDuration;
+        float mSunPreSunsetTime;
+
+        TimeOfDaySettings mTimeSettings;
+
+        // fading of night skydome
+        TimeOfDayInterpolator<float> mNightFade;
+
+        float mHoursBetweenWeatherChanges;
+
+        // underwater fog not really related to weather, but we handle it here because it's convenient
+        TimeOfDayInterpolator<float> mUnderwaterFog;
+
+        WeatherStore* mWeatherStore;
+        MoonModel mMasser;
+        MoonModel mSecunda;
+
+        float mWindSpeed;
+        float mCurrentWindSpeed;
+        float mNextWindSpeed;
+        bool mIsStorm;
+        bool mUseTorches;
+
+        ESM::RefId mCurrentRegion;
+        float mTimePassed;
+        bool mFastForward;
+        float mWeatherUpdateTime;
+        float mTransitionFactor;
+        NightDayMode mNightDayMode;
+        ESM::RefId mCurrentWeather;
+        ESM::RefId mNextWeather;
+        ESM::RefId mQueuedWeather;
+        std::map<ESM::RefId, RegionWeather> mRegions;
+
+        MWBase::Sound* mAmbientSound{ nullptr };
+        ESM::RefId mPlayingAmbientSoundID;
+        MWBase::Sound* mRainSound{ nullptr };
+        ESM::RefId mPlayingRainSoundID;
+
+        void importRegions();
+
+        void regionalWeatherChanged(const ESM::RefId& regionID, RegionWeather& region);
+        bool updateWeatherTime();
+        bool updateWeatherRegion(const ESM::RefId& playerRegion);
+        void updateWeatherTransitions(const float elapsedRealSeconds);
+        void forceWeather(ESM::RefId weatherID);
+
+        bool inTransition() const;
+        void addWeatherTransition(ESM::RefId weatherID);
+
+        MWRender::WeatherResult calculateWeatherResult(
+            const float gameHour, const float elapsedSeconds, const bool isPaused) const;
+        MWRender::WeatherResult calculateResult(const Weather& weather, const float gameHour) const;
+        MWRender::WeatherResult calculateTransitionResult(
+            const Weather& currentWeather, const Weather& nextWeather, const float factor, const float gameHour) const;
+        float calculateWindSpeed(const Weather& weather, float currentSpeed) const;
+    };
+}
+
+#endif // GAME_MWWORLD_WEATHER_H

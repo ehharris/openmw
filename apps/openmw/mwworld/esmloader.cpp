@@ -8,9 +8,12 @@
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/readerscache.hpp>
 #include <components/esm4/reader.hpp>
+#include <components/debug/debuglog.hpp>
 #include <components/files/conversion.hpp>
+#include <components/files/oblivion/esm.hpp>
 #include <components/files/openfile.hpp>
 #include <components/misc/strings/lower.hpp>
+#include <components/oblivion/contentloader.hpp>
 #include <components/resource/resourcesystem.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -66,6 +69,43 @@ namespace MWWorld
             }
             case ESM::Format::Tes4:
             {
+                // Oblivion plugins share the TES4 signature with the other TES4-family games.
+                // Run Oblivion-specific validation through the dedicated content loading system
+                // before handing the file off to the generic ESM4 reader. Validation failures
+                // are only logged; the ESM4 reader below produces the authoritative error.
+                if (Oblivion::ContentLoader::isOblivionPlugin(filepath))
+                {
+                    try
+                    {
+                        const Files::Oblivion::Header header = Oblivion::ContentLoader::validate(filepath);
+                        std::vector<std::string> unavailableMasters;
+                        for (const ESM::MasterData& master : header.mMaster)
+                            if (!mNameToIndex.contains(Misc::StringUtils::lowerCase(master.name)))
+                                unavailableMasters.push_back(master.name);
+
+                        if (unavailableMasters.empty())
+                            Log(Debug::Verbose) << "Validated Oblivion plugin " << filepath;
+                        else
+                        {
+                            std::string joined;
+                            for (std::size_t i = 0; i < unavailableMasters.size(); ++i)
+                            {
+                                if (i != 0)
+                                    joined += ", ";
+                                joined += unavailableMasters[i];
+                            }
+                            Log(Debug::Warning) << "Oblivion plugin '" << filepath
+                                                << "' requires master file(s) " << joined
+                                                << " which have not been loaded yet; check the load order";
+                        }
+                    }
+                    catch (const std::exception& error)
+                    {
+                        Log(Debug::Warning) << "Failed to validate the header of the Oblivion plugin '" << filepath
+                                            << "': " << error.what();
+                    }
+                }
+
                 ESM4::Reader reader(std::move(stream), filepath,
                     MWBase::Environment::get().getResourceSystem()->getVFS(),
                     mEncoder != nullptr ? &mEncoder->getStatelessEncoder() : nullptr);

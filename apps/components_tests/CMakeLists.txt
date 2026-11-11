@@ -66,6 +66,7 @@ file(GLOB UNITTEST_SRC_FILES
 
     files/conversiontests.cpp
     files/hash.cpp
+    files/test_manager.cpp
 
     toutf8/toutf8.cpp
 
@@ -79,6 +80,21 @@ file(GLOB UNITTEST_SRC_FILES
     esm3/testesmwriter.cpp
     esm3/testinfoorder.cpp
     esm3/testcstringids.cpp
+
+    files/oblivion/test_esm.cpp
+    files/oblivion/test_bsa.cpp
+
+    # The Oblivion content loader test lives at the path requested by the task brief; it is
+    # built as part of this target.
+    ${PROJECT_SOURCE_DIR}/tests/components/oblivion/test_contentloader.cpp
+
+    # The Oblivion integration tests live at the paths requested by the task brief; they are
+    # built as part of this target. They exercise the Oblivion components together with the
+    # rest of the engine's infrastructure (settings, options, content loading, ESM4 reader,
+    # mechanics systems).
+    ${PROJECT_SOURCE_DIR}/tests/integration/test_oblivion_integration.cpp
+    ${PROJECT_SOURCE_DIR}/tests/integration/test_oblivion_loading.cpp
+    ${PROJECT_SOURCE_DIR}/tests/integration/test_oblivion_complete.cpp
 
     nifosg/testcontroller.cpp
     nifosg/testnifloader.cpp

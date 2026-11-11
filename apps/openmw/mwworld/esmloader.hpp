@@ -24,6 +24,10 @@ namespace MWWorld
 
     class ESMStore;
 
+    // Loads content files of any supported format. TES4-family (Oblivion) content files
+    // are additionally validated and summarized by Oblivion::ContentLoader
+    // (components/oblivion/contentloader.hpp) before they are read.
+
     struct EsmLoader : public ContentLoader
     {
         explicit EsmLoader(MWWorld::ESMStore& store, ESM::ReadersCache& readers, ToUTF8::Utf8Encoder* encoder,

@@ -1,9 +1,11 @@
 #include <components/debug/debugging.hpp>
 #include <components/fallback/fallback.hpp>
 #include <components/fallback/validate.hpp>
+#include <components/files/collections.hpp>
 #include <components/files/configurationmanager.hpp>
 #include <components/misc/osgpluginchecker.hpp>
 #include <components/misc/rng.hpp>
+#include <components/oblivion/config.hpp>
 #include <components/platform/platform.hpp>
 #include <components/version/version.hpp>
 
@@ -129,6 +131,24 @@ bool parseOptions(int argc, char** argv, OMW::Engine& engine, Files::Configurati
     for (auto& file : groundcover)
     {
         engine.addGroundcoverFile(file);
+    }
+
+    // Oblivion content check: detect Oblivion (TES4) plugins among the configured content
+    // files, validate them and check their master dependencies (availability and load order).
+    // Runs over both the content and the groundcover files, in load order. Fatal issues
+    // abort the launch before any game data is loaded.
+    Oblivion::Configuration oblivionConfig = Oblivion::loadConfiguration(variables);
+    engine.setOblivionConfiguration(oblivionConfig);
+    std::vector<std::string> filesToCheck = content;
+    filesToCheck.insert(filesToCheck.end(), groundcover.begin(), groundcover.end());
+    Files::Collections oblivionCollections(dataDirs);
+    Oblivion::ContentReport oblivionReport
+        = Oblivion::checkContentFiles(filesToCheck, oblivionCollections, oblivionConfig);
+    Oblivion::logContentReport(oblivionReport);
+    if (oblivionReport.hasErrors())
+    {
+        Log(Debug::Error) << "Aborting due to errors in the Oblivion content configuration.";
+        return false;
     }
 
     if (variables.count("lua-scripts"))

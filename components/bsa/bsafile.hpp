@@ -40,7 +40,10 @@ namespace Bsa
     {
         Unknown = 0x0,
         Uncompressed = 0x100,
-        Compressed = 0x415342, // B, S, A,
+        Compressed = 0x415342, // B, S, A, "BSA\0" archive, TES4-era version stored in the second header word
+        TES4 = 0x415343, // "BSA\0" archive of version 103 (0x67), used by Oblivion
+        FO3 = 0x415344, // "BSA\0" archive of version 104 (0x68), used by Fallout 3
+        SSE = 0x415345, // "BSA\0" archive of version 105 (0x69), used by Skyrim SE
         BA2GNRL, // used by FO4, BSA which contains files
         BA2DX10 // used by FO4, BSA which contains textures
     };

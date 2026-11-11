@@ -8,6 +8,7 @@
 #include <components/debug/debuglog.hpp>
 #include <components/esm/refid.hpp>
 #include <components/files/collections.hpp>
+#include <components/oblivion/config.hpp>
 #include <components/settings/settings.hpp>
 #include <components/translation/translation.hpp>
 
@@ -164,6 +165,7 @@ namespace OMW
         std::string mCellName;
         std::vector<std::string> mContentFiles;
         std::vector<std::string> mGroundcoverFiles;
+        Oblivion::Configuration mOblivionConfig;
 
         std::unique_ptr<Stereo::Manager> mStereoManager;
 
@@ -230,6 +232,10 @@ namespace OMW
          */
         void addContentFile(const std::string& file);
         void addGroundcoverFile(const std::string& file);
+
+        /// Set the effective Oblivion configuration resolved from the command line/openmw.cfg and settings.cfg
+        void setOblivionConfiguration(const Oblivion::Configuration& configuration);
+        const Oblivion::Configuration& getOblivionConfiguration() const { return mOblivionConfig; }
 
         /// Disable or enable all sounds
         void setSoundUsage(bool soundUsage);
