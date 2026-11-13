@@ -59,7 +59,8 @@ namespace
             if (std::filesystem::is_regular_file(mDataDir / relative))
                 return true;
             const std::string message = (mDataDir / relative).string() + " does not exist";
-            GTEST_MESSAGE_(message.c_str(), ::testing::TestPartResult::kSkip);            return false;
+            GTEST_MESSAGE_(message.c_str(), ::testing::TestPartResult::kSkip);
+            return false;
         }
     };
 
@@ -164,8 +165,10 @@ TEST_F(OblivionRealData, ValidateVanillaMasterNoErrors)
     if (!requireFile("Oblivion.esm"))
         return;
 
-    // validate() must accept the vanilla master. Before the whitespace-only SNAM/MAST
-    // filtering fix this threw on real data due to the vanilla ' ' quirk.
+    // validate() must accept the vanilla master end to end. Note: vanilla Oblivion.esm contains no MAST
+    // subrecords at all (its whitespace quirk is the ' ' SNAM description), and the pre-fix parser already
+    // handled SNAM/OFST/DELE — so this did not throw before the Task 4 whitespace-MAST filtering fix. It
+    // guards that validation stays clean against the actual shipped file.
     Files::Oblivion::Header header;
     ASSERT_NO_THROW(header = Oblivion::ContentLoader::validate(mDataDir / "Oblivion.esm"));
 
