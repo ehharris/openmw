@@ -5,6 +5,7 @@
 
 #include <components/esm/attr.hpp>
 #include <components/esm/refid.hpp>
+#include <components/fallback/fallback.hpp>
 #include <components/esm3/loadgmst.hpp>
 #include <components/esm3/loadnpc.hpp>
 #include <components/esm3/loadrace.hpp>
@@ -12,27 +13,12 @@
 #include <components/esm3/variant.hpp>
 
 #include "esmstore.hpp"
+#include "tes4defaults_gmsts.hpp"
 
 namespace MWWorld
 {
     namespace
     {
-        struct DefaultGameSetting
-        {
-            std::string_view mId;
-            float mValue;
-        };
-
-        /// Mandatory ESM3 GMST records that engine code dereferences unconditionally. TES4 content files do not
-        /// provide these, so a TES4-only session would crash at startup without them. Grow this table as new
-        /// startup failures are found.
-        constexpr DefaultGameSetting sDefaultGameSettings[] = {
-            { "fSwimHeightScale", 1.35f },
-            // Unarmored armour rating formula (MWWorld::Npc::getModifiedRatingFromHealth via store.find).
-            { "fUnarmoredBase1", 6.f },
-            { "fUnarmoredBase2", 0.03f },
-        };
-
         struct DefaultSkill
         {
             int mIndex; // ESM::Skill::indexToRefId
@@ -78,7 +64,7 @@ namespace MWWorld
     {
         Store<ESM::GameSetting>& gmsts = store.getWritable<ESM::GameSetting>();
 
-        for (const auto& defaultSetting : sDefaultGameSettings)
+        for (const auto& defaultSetting : sDefaultGmstFloats)
         {
             const ESM::RefId id = ESM::RefId::stringRefId(defaultSetting.mId);
             if (gmsts.search(id) != nullptr)
@@ -90,6 +76,59 @@ namespace MWWorld
             setting.mValue = ESM::Variant(defaultSetting.mValue);
             store.insertStatic(setting);
         }
+
+        for (const auto& defaultSetting : sDefaultGmstInts)
+        {
+            const ESM::RefId id = ESM::RefId::stringRefId(defaultSetting.mId);
+            if (gmsts.search(id) != nullptr)
+                continue;
+
+            ESM::GameSetting setting;
+            setting.blank();
+            setting.mId = id;
+            setting.mValue = ESM::Variant(defaultSetting.mValue);
+            store.insertStatic(setting);
+        }
+
+        for (const auto& id : sDefaultGmstStrings)
+        {
+            const ESM::RefId refId = ESM::RefId::stringRefId(id);
+            if (gmsts.search(refId) != nullptr)
+                continue;
+
+            ESM::GameSetting setting;
+            setting.blank();
+            setting.mId = refId;
+            setting.mValue = ESM::Variant(std::string{});
+            store.insertStatic(setting);
+        }
+    }
+
+    void seedTES4FallbackGameSettings(ESMStore& store)
+    {
+        // OpenMW-specific string/colour GMSTs (FontColor_*, Movies_*, Weather_* textures, ...) live in the fallback
+        // map loaded from openmw.cfg rather than in content files. Lua UI scripts read them through core.getGMST(),
+        // which only sees GMST records, so mirror them into the store for TES4-only sessions.
+        Store<ESM::GameSetting>& gmsts = store.getWritable<ESM::GameSetting>();
+
+        auto seed = [&gmsts, &store](const char* name, ESM::Variant value) {
+            const ESM::RefId id = ESM::RefId::stringRefId(name);
+            if (gmsts.search(id) != nullptr)
+                return;
+
+            ESM::GameSetting setting;
+            setting.blank();
+            setting.mId = id;
+            setting.mValue = std::move(value);
+            store.insertStatic(setting);
+        };
+
+        for (const auto& [name, value] : Fallback::Map::getIntFallbackMap())
+            seed(name.c_str(), ESM::Variant(value));
+        for (const auto& [name, value] : Fallback::Map::getFloatFallbackMap())
+            seed(name.c_str(), ESM::Variant(value));
+        for (const auto& [name, value] : Fallback::Map::getNonNumericFallbackMap())
+            seed(name.c_str(), ESM::Variant(std::string(value)));
     }
 
     void seedTES4DefaultSkills(ESMStore& store)

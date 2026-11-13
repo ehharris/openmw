@@ -562,6 +562,7 @@ namespace MWWorld
         if (!hasTES3Content())
         {
             seedTES4DefaultGameSettings(*this);
+            seedTES4FallbackGameSettings(*this);
             seedTES4DefaultSkills(*this);
             seedTES4DefaultPlayer(*this);
         }
