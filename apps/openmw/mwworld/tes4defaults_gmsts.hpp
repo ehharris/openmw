@@ -2,6 +2,25 @@
 // Derived from apps/opencs/model/world/defaultgmsts.cpp (vanilla Morrowind GMST vocabulary).
 // Provides the mandatory game-setting names and default values that engine code dereferences
 // unconditionally for TES4-only sessions, which ship no Morrowind-dialect GMST records.
+//
+// Regeneration:
+//   The tables below were produced by a one-off Python script (kept out of tree; it lived at
+//   /tmp/opencode/gen_gmsts.py during development and was not committed) that parsed the arrays
+//   defined in apps/opencs/model/world/defaultgmsts.cpp (declared in defaultgmsts.hpp):
+//     - CSMWorld::DefaultGmsts::Floats + FloatsDefaultValues -> sDefaultGmstFloats (258 entries,
+//       vanilla values verbatim, including upstream misspellings such as iLevelupMiscMultAttriubte
+//       and fWereWolfIntellegence — they are the real GMST names engine/Lua code references)
+//     - CSMWorld::DefaultGmsts::Ints + IntsDefaultValues     -> sDefaultGmstInts   (89 entries)
+//     - CSMWorld::DefaultGmsts::Strings                      -> sDefaultGmstStrings (1174 names only;
+//       opencs carries no default string values, so seedTES4DefaultGameSettings inserts them as empty
+//       strings and content always wins). The Optional* arrays are deliberately not seeded.
+//   To regenerate after changing the opencs table: re-derive the three tables from those arrays with
+//   such a script (or hand-edit), keeping entries sorted by id and spelling preserved.
+//
+//   Fallback map behaviour (companion, not part of this file): OpenMW-extension GMSTs (FontColor_*,
+//   Movies_*, ...) are not in the opencs table; seedTES4FallbackGameSettings mirrors them at runtime
+//   from Fallback::Map (the openmw.cfg defaults) into the GMST store, skip-if-exists, so content and
+//   this table always take precedence. See apps/openmw/mwworld/tes4defaults.cpp.
 #ifndef OPENMW_MWWORLD_TES4DEFAULTS_GMSTS_H
 #define OPENMW_MWWORLD_TES4DEFAULTS_GMSTS_H
 
