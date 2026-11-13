@@ -92,6 +92,16 @@ namespace
         // class unpatched, which is correct for converted records. Vanilla Morrowind always ships classes, so this
         // path is never taken there.
         static const ESM::RefId sEmpty;
+        // Warn once: previously this failed fast with "List of NPC classes is empty!"; keep the condition
+        // diagnosable now that it degrades silently (expected for TES4-only content, broken otherwise).
+        static bool sWarned = false;
+        if (!sWarned)
+        {
+            sWarned = true;
+            Log(Debug::Warning) << "List of NPC classes is empty; NPCs with unknown classes get an empty class "
+                                   "as a fallback (expected for TES4-family content, indicates broken content "
+                                   "otherwise).";
+        }
         return sEmpty;
     }
 
@@ -102,6 +112,14 @@ namespace
             return it->mId;
         // See getDefaultClass: TES4-family content may provide no Morrowind-dialect races either.
         static const ESM::RefId sEmpty;
+        static bool sWarned = false;
+        if (!sWarned)
+        {
+            sWarned = true;
+            Log(Debug::Warning) << "List of NPC races is empty; NPCs with unknown races get an empty race as a "
+                                   "fallback (expected for TES4-family content, indicates broken content "
+                                   "otherwise).";
+        }
         return sEmpty;
     }
 
@@ -704,10 +722,14 @@ namespace MWWorld
         auto& npcs = getWritable<ESM::NPC>();
         const ESM::NPC* player = npcs.search(ESM::RefId::stringRefId("Player"));
         if (player == nullptr)
+        {
             // TES4-family content may not provide a usable Morrowind-dialect "Player" record (vanilla Oblivion marks
             // its player base object as invalid, so it is not loaded). Starting a game requires one; world
             // initialisation does not.
+            Log(Debug::Warning) << "No \"Player\" NPC record found; starting a new game will fail until one is "
+                                   "provided (e.g. by the TES4 default seeding or a mod).";
             return;
+        }
         npcs.insert(*player);
     }
 
