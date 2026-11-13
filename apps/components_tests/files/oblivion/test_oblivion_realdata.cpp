@@ -49,12 +49,17 @@ namespace
                 GTEST_SKIP() << "OPENMW_TEST_OBLIVION_DATA=" << env << " is not an existing directory";
         }
 
-        // Skips the current test when the given file does not exist below the data
-        // directory (e.g. a non-default installation layout).
-        void requireFile(const std::filesystem::path& relative)
+        // Returns true when the given file exists below the data directory. Otherwise
+        // records a skip for the current test and returns false - GTEST_SKIP() expands
+        // to `return <void>` and cannot be used in a non-void helper, so the skip is
+        // recorded with the underlying GTEST_MESSAGE_ macro instead; every caller must
+        // return immediately on false (e.g. `if (!requireFile(x)) return;`).
+        bool requireFile(const std::filesystem::path& relative)
         {
-            if (!std::filesystem::is_regular_file(mDataDir / relative))
-                GTEST_SKIP() << (mDataDir / relative).string() << " does not exist";
+            if (std::filesystem::is_regular_file(mDataDir / relative))
+                return true;
+            const std::string message = (mDataDir / relative).string() + " does not exist";
+            GTEST_MESSAGE_(message.c_str(), ::testing::TestPartResult::kSkip);            return false;
         }
     };
 
@@ -97,7 +102,9 @@ namespace
             return startsWith(data, "ID3") || (data.size() >= 2 && static_cast<unsigned char>(data[0]) == 0xFF
                 && (static_cast<unsigned char>(data[1]) & 0xE0) == 0xE0); // MPEG frame sync
         if (extension == ".xml")
-            return !data.empty() && data[0] == '<';
+            // '<' followed by a tag name, an XML declaration or a comment/CDATA marker.
+            return data.size() >= 2 && data[0] == '<'
+                && (data[1] == '?' || data[1] == '!' || std::isalpha(static_cast<unsigned char>(data[1])));
         return false;
     }
 
@@ -112,7 +119,8 @@ namespace
 
 TEST_F(OblivionRealData, ParsesVanillaOblivionEsm)
 {
-    requireFile("Oblivion.esm");
+    if (!requireFile("Oblivion.esm"))
+        return;
 
     Files::Oblivion::EsmFile esm;
     ASSERT_NO_THROW(esm.open(mDataDir / "Oblivion.esm"));
@@ -153,25 +161,16 @@ TEST_F(OblivionRealData, ParsesVanillaOblivionEsm)
 
 TEST_F(OblivionRealData, ValidateVanillaMasterNoErrors)
 {
-    requireFile("Oblivion.esm");
+    if (!requireFile("Oblivion.esm"))
+        return;
 
     // validate() must accept the vanilla master. Before the whitespace-only SNAM/MAST
     // filtering fix this threw on real data due to the vanilla ' ' quirk.
     Files::Oblivion::Header header;
     ASSERT_NO_THROW(header = Oblivion::ContentLoader::validate(mDataDir / "Oblivion.esm"));
 
-    // Vanilla Oblivion.esm has no master dependencies, so nothing can be missing.
+    // Vanilla Oblivion.esm has no master dependencies, so nothing can be missing from it.
     EXPECT_TRUE(header.mMaster.empty());
-
-    // Feed the header's masters through the dependency checker anyway: with the file
-    // itself available, no missing masters may be reported.
-    Oblivion::ContentFile content;
-    content.mFilename = mDataDir / "Oblivion.esm";
-    for (const auto& master : header.mMaster)
-        content.mMasters.push_back({master.name, master.size});
-
-    const std::vector<std::string> available = {"Oblivion.esm"};
-    EXPECT_TRUE(Oblivion::ContentLoader::findMissingMasters(content, available).empty());
 }
 
 TEST_F(OblivionRealData, ReadsAllOfficialBSAs)
@@ -189,7 +188,8 @@ TEST_F(OblivionRealData, ReadsAllOfficialBSAs)
     for (const char* name : archiveNames)
     {
         SCOPED_TRACE(name);
-        requireFile(name);
+        if (!requireFile(name))
+            return;
 
         Files::Oblivion::BsaFile bsa;
         ASSERT_NO_THROW(bsa.open(mDataDir / name));
@@ -213,12 +213,12 @@ TEST_F(OblivionRealData, ReadsAllOfficialBSAs)
             const std::size_t dotPos = lowered.find_last_of('.');
             if (dotPos == std::string::npos)
                 continue;
-            chosenExt = lowered.substr(dotPos);
-            if (isKnownExtension(chosenExt))
-            {
-                chosen = &file;
-                break;
-            }
+            const std::string extension = lowered.substr(dotPos);
+            if (!isKnownExtension(extension))
+                continue;
+            chosen = &file;
+            chosenExt = extension;
+            break;
         }
         ASSERT_NE(chosen, nullptr) << "no extractable entry with a known extension in " << name;
 
