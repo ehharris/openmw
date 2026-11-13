@@ -294,6 +294,54 @@ TEST(FilesOblivionEsm, acceptsVersionOnePointZeroHeader)
     EXPECT_FLOAT_EQ(plugin.header().mData.version.f, 1.0f);
 }
 
+TEST(FilesOblivionEsm, ignoresWhitespaceOnlyMasterEntries)
+{
+    // Oblivion.esm contains a master entry whose name is only whitespace (a single space).
+    // Such entries must not surface in the parsed master list, otherwise content
+    // validation reports them as missing masters. Their DATA size record belongs to the
+    // ignored entry and must not be attributed to another master either.
+    PluginOptions options;
+    options.masters = { { " ", 123456 }, { "Oblivion.esm", 2345678 }, { "", 0 } };
+
+    const std::filesystem::path path = makeTempPlugin("whitespace-masters.esm", buildPlugin(options));
+
+    Files::Oblivion::EsmFile plugin(path);
+    ASSERT_TRUE(plugin.isOpen());
+
+    const std::vector<ESM::MasterData>& masters = plugin.header().mMaster;
+    ASSERT_EQ(masters.size(), 1u);
+    EXPECT_EQ(masters[0].name, "Oblivion.esm");
+    EXPECT_EQ(masters[0].size, 2345678u);
+}
+
+TEST(FilesOblivionEsm, noMastersWhenAllAreWhitespace)
+{
+    // A plugin whose only master is whitespace-only ends up with an empty master list;
+    // the DATA record following the ignored MAST must not throw either.
+    PluginOptions options;
+    options.masters = { { " ", 42 } };
+
+    const std::filesystem::path path = makeTempPlugin("only-whitespace-masters.esm", buildPlugin(options));
+
+    Files::Oblivion::EsmFile plugin(path);
+    EXPECT_TRUE(plugin.header().mMaster.empty());
+}
+
+TEST(FilesOblivionEsm, toleratesWhitespaceOnlyDescription)
+{
+    // The TES4 record of Oblivion.esm carries a SNAM subrecord consisting of a single
+    // space (" \0"). It is the file description, not a master: it must parse fine and
+    // must never end up in the master list.
+    PluginOptions options;
+    options.description = " ";
+
+    const std::filesystem::path path = makeTempPlugin("whitespace-desc.esm", buildPlugin(options));
+
+    Files::Oblivion::EsmFile plugin(path);
+    EXPECT_EQ(plugin.header().mDesc, " ");
+    EXPECT_TRUE(plugin.header().mMaster.empty());
+}
+
 TEST(FilesOblivionEsm, rejectsNonOblivionFiles)
 {
     const std::filesystem::path path = makeTempPlugin("morrowind.esm", {});

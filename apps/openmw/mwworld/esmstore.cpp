@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <fstream>
+#include <optional>
+#include <set>
 #include <tuple>
 
 #include <components/debug/debuglog.hpp>
@@ -11,6 +13,8 @@
 #include <components/esm3/esmwriter.hpp>
 #include <components/esm3/readerscache.hpp>
 #include <components/esm4/common.hpp>
+#include <components/esm4/convertglob.hpp>
+#include <components/esm4/loadglob.hpp>
 #include <components/esm4/reader.hpp>
 #include <components/esm4/readerutils.hpp>
 #include <components/esmloader/load.hpp>
@@ -19,6 +23,8 @@
 #include <components/misc/algorithm.hpp>
 
 #include "../mwmechanics/spelllist.hpp"
+
+#include "tes4defaults.hpp"
 
 namespace
 {
@@ -82,7 +88,21 @@ namespace
         auto it = classes.begin();
         if (it != classes.end())
             return it->mId;
-        throw std::runtime_error("List of NPC classes is empty!");
+        // TES4-family content provides no Morrowind-dialect NPC classes (NPCS). An empty fallback leaves the NPC's
+        // class unpatched, which is correct for converted records. Vanilla Morrowind always ships classes, so this
+        // path is never taken there.
+        static const ESM::RefId sEmpty;
+        // Warn once: previously this failed fast with "List of NPC classes is empty!"; keep the condition
+        // diagnosable now that it degrades silently (expected for TES4-only content, broken otherwise).
+        static bool sWarned = false;
+        if (!sWarned)
+        {
+            sWarned = true;
+            Log(Debug::Warning) << "List of NPC classes is empty; NPCs with unknown classes get an empty class "
+                                   "as a fallback (expected for TES4-family content, indicates broken content "
+                                   "otherwise).";
+        }
+        return sEmpty;
     }
 
     const ESM::RefId& getDefaultRace(const MWWorld::Store<ESM::Race>& races)
@@ -90,7 +110,17 @@ namespace
         auto it = races.begin();
         if (it != races.end())
             return it->mId;
-        throw std::runtime_error("List of NPC races is empty!");
+        // See getDefaultClass: TES4-family content may provide no Morrowind-dialect races either.
+        static const ESM::RefId sEmpty;
+        static bool sWarned = false;
+        if (!sWarned)
+        {
+            sWarned = true;
+            Log(Debug::Warning) << "List of NPC races is empty; NPCs with unknown races get an empty race as a "
+                                   "fallback (expected for TES4-family content, indicates broken content "
+                                   "otherwise).";
+        }
+        return sEmpty;
     }
 
     std::vector<ESM::NPC> getNPCsToReplace(const MWWorld::Store<ESM::Faction>& factions,
@@ -270,6 +300,29 @@ namespace MWWorld
             auto recordType = static_cast<ESM4::RecordTypes>(reader.hdr().record.typeId);
 
             ESM::RecNameInts esm4RecName = static_cast<ESM::RecNameInts>(ESM::esm4Recname(recordType));
+
+            // TES4 GLOB records are bridged into the esm3 Global store instead of getting their own ESM4 store.
+            if constexpr (std::is_same_v<T, ESM::Global>)
+            {
+                if (recordType == ESM4::REC_GLOB)
+                {
+                    reader.getRecordData();
+                    ESM4::GlobalVariable glob;
+                    glob.load(reader);
+                    if (auto converted = ESM4::convertToESM3(glob))
+                        store.insertStatic(*converted);
+                    else
+                    {
+                        // Warn once per unrecognised FNAM type to avoid spamming the log.
+                        static std::set<std::uint8_t> warnedTypes;
+                        if (warnedTypes.insert(glob.mType).second)
+                            Log(Debug::Warning) << "Skipping ESM4 GLOB '" << glob.mEditorId
+                                                << "' with unsupported type '" << static_cast<char>(glob.mType) << "'";
+                    }
+                    return true;
+                }
+            }
+
             if constexpr (HasRecordId<T>)
             {
                 if constexpr (ESM::isESM4Rec(T::sRecordId))
@@ -514,6 +567,7 @@ namespace MWWorld
                 cfg.mScripts.insert(cfg.mScripts.end(), addition.mScripts.begin(), addition.mScripts.end());
             }
         }
+        LuaUtil::filterMorrowindOnlyScripts(cfg, hasTES3Content());
         return cfg;
     }
 
@@ -522,6 +576,14 @@ namespace MWWorld
         if (mIsSetUpDone)
             throw std::logic_error("ESMStore::setUp() is called twice");
         mIsSetUpDone = true;
+
+        if (!hasTES3Content())
+        {
+            seedTES4DefaultGameSettings(*this);
+            seedTES4FallbackGameSettings(*this);
+            seedTES4DefaultSkills(*this);
+            seedTES4DefaultPlayer(*this);
+        }
 
         for (const auto& [_, store] : mStoreImp->mRecNameToStore)
             store->setUp();
@@ -658,7 +720,16 @@ namespace MWWorld
     void ESMStore::movePlayerRecord()
     {
         auto& npcs = getWritable<ESM::NPC>();
-        auto player = npcs.find(ESM::RefId::stringRefId("Player"));
+        const ESM::NPC* player = npcs.search(ESM::RefId::stringRefId("Player"));
+        if (player == nullptr)
+        {
+            // TES4-family content may not provide a usable Morrowind-dialect "Player" record (vanilla Oblivion marks
+            // its player base object as invalid, so it is not loaded). Starting a game requires one; world
+            // initialisation does not.
+            Log(Debug::Warning) << "No \"Player\" NPC record found; starting a new game will fail until one is "
+                                   "provided (e.g. by the TES4 default seeding or a mod).";
+            return;
+        }
         npcs.insert(*player);
     }
 

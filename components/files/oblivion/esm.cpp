@@ -34,6 +34,7 @@
 #include <components/files/conversion.hpp>
 #include <components/files/openfile.hpp>
 #include <components/files/utils.hpp>
+#include <components/misc/strings/algorithm.hpp>
 
 namespace Files
 {
@@ -423,6 +424,10 @@ namespace Files
             Header result;
             result.flags = header.flags;
 
+            // Set when a whitespace-only master entry was skipped: the DATA size record
+            // following it belongs to that entry and must not be attributed elsewhere.
+            bool ignoreNextMasterSize = false;
+
             for (const SubRecord& sub : parseSubRecords(payload, mFilename, REC_TES4))
             {
                 switch (sub.type)
@@ -443,14 +448,31 @@ namespace Files
                         break;
                     case ESM::fourCC("MAST"):
                     {
+                        std::string name = sub.asZString();
+                        Misc::StringUtils::trim(name);
+                        if (name.empty())
+                        {
+                            // Vanilla Oblivion.esm contains a master entry whose name is
+                            // only whitespace. Ignore it (with its DATA size record) so
+                            // downstream validation never sees it as a missing master.
+                            ignoreNextMasterSize = true;
+                            break;
+                        }
+
                         ESM::MasterData master;
-                        master.name = sub.asZString();
+                        master.name = std::move(name);
                         master.size = 0;
                         result.mMaster.push_back(std::move(master));
+                        ignoreNextMasterSize = false;
                         break;
                     }
                     case ESM::fourCC("DATA"):
                     {
+                        if (ignoreNextMasterSize)
+                        {
+                            ignoreNextMasterSize = false; // size record of the ignored master entry
+                            break;
+                        }
                         if (result.mMaster.empty())
                             throw std::runtime_error(errorContext(mFilename,
                                 "DATA subrecord without a preceding MAST subrecord"));

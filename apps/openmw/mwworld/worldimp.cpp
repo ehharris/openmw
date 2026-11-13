@@ -2815,8 +2815,11 @@ namespace MWWorld
             idx++;
         }
 
-        if (const auto v = esmLoader.getMasterFileFormat(); v.has_value() && *v == 0)
-            ensureNeededRecords(); // Insert records that may not be present in all versions of master files.
+        const auto v = esmLoader.getMasterFileFormat();
+        if ((v.has_value() && *v == 0) || !mStore.hasTES3Content())
+            // Insert records that may not be present in all versions of master files. TES4-only sessions run on the
+            // Morrowind-dialect runtime, which dereferences these globals unconditionally.
+            ensureNeededRecords();
     }
 
     void World::loadGroundcoverFiles(const Files::Collections& fileCollections,

@@ -85,6 +85,47 @@ namespace
         EXPECT_ERROR(conf.init(std::move(cfg), false), "Global script can not have local flags");
     }
 
+    TEST(LuaConfigurationTest, FilterMorrowindOnlyScripts)
+    {
+        // The same block of Morrowind-dialect scripts that files/data-mw/builtin.omwscripts.in appends to the
+        // builtin script list, plus a few scripts that must never be filtered out.
+        ESM::LuaScriptsCfg cfg;
+        LuaUtil::parseOMWScripts(cfg, R"X(
+            GLOBAL: scripts/omw/cellhandlers.lua
+            GLOBAL: scripts/omw/combat/global.lua
+            PLAYER: scripts/omw/combat/settingspage.lua
+            NPC,CREATURE,PLAYER: scripts/omw/combat/local.lua
+            PLAYER: scripts/omw/music/music.lua
+            MENU: scripts/omw/music/settings.lua
+            PLAYER: scripts/omw/playerskillhandlers.lua
+            LOAD: scripts/omw/esmfallbacks.lua
+            CREATURE, NPC, PLAYER: scripts/omw/spellcasting/local.lua
+            DOOR, CONTAINER: scripts/omw/spellcasting/lockable.lua
+            GLOBAL: scripts/omw/spellcasting/global.lua
+            PLAYER: scripts/omw/weather.lua
+            GLOBAL: scripts/omw/mwui/init.lua
+            GLOBAL: scripts/some_mod/third_party.lua)X");
+        ASSERT_EQ(cfg.mScripts.size(), 14);
+
+        {
+            // No TES3 content loaded: the Morrowind-dialect block must be dropped, everything else kept as is.
+            ESM::LuaScriptsCfg filtered = cfg;
+            LuaUtil::filterMorrowindOnlyScripts(filtered, false);
+            ASSERT_EQ(filtered.mScripts.size(), 2);
+            EXPECT_EQ(filtered.mScripts[0].mScriptPath, VFS::Path::Normalized("scripts/omw/mwui/init.lua"));
+            EXPECT_EQ(filtered.mScripts[1].mScriptPath, VFS::Path::Normalized("scripts/some_mod/third_party.lua"));
+        }
+
+        {
+            // TES3 content loaded: the configuration must not be modified.
+            ESM::LuaScriptsCfg filtered = cfg;
+            LuaUtil::filterMorrowindOnlyScripts(filtered, true);
+            ASSERT_EQ(filtered.mScripts.size(), 14);
+            for (size_t i = 0; i < cfg.mScripts.size(); ++i)
+                EXPECT_EQ(filtered.mScripts[i].mScriptPath, cfg.mScripts[i].mScriptPath);
+        }
+    }
+
     TEST(LuaConfigurationTest, ConfInit)
     {
         ESM::LuaScriptsCfg cfg;

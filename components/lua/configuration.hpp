@@ -62,6 +62,10 @@ namespace LuaUtil
     // Parse ESM::LuaScriptsCfg from text and add to `cfg`.
     void parseOMWScripts(ESM::LuaScriptsCfg& cfg, std::string_view data);
 
+    // Remove scripts that are written for the Morrowind (TES3) record layout unless TES3 content is loaded.
+    // Does nothing when `hasTES3Content` is true.
+    void filterMorrowindOnlyScripts(ESM::LuaScriptsCfg& cfg, bool hasTES3Content);
+
     std::string scriptCfgToString(const ESM::LuaScriptCfg& script);
 
 }

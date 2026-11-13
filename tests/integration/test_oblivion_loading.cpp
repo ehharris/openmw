@@ -39,6 +39,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -421,6 +422,36 @@ TEST(OblivionLoading, fullOblivionLoadingSequenceLoadsMasterAndPlugin)
         ASSERT_EQ(esm4Mod.getGameFiles().size(), 1u);
         EXPECT_EQ(esm4Mod.getGameFiles().front().name, "SequenceMaster.esm");
     }
+}
+
+// Regression: the streaming loader (components/esm4/loadtes4.cpp) must drop whitespace-only MAST entries
+// exactly like the validation parser (components/files/oblivion/esm.cpp) does. Otherwise a modded TES4 file
+// with such an entry passes content validation and then dies in ESM4::Reader::updateModIndices with
+// "required dependency ' ' not found" — the failure class the whitespace-MAST filtering fix removed.
+TEST(OblivionLoading, whitespaceMastIsDroppedByTheStreamingReader)
+{
+    const std::filesystem::path dir = makeDataDir("whitespace-mast");
+
+    PluginOptions options;
+    options.hedrVersion = ESM::VER_100;
+    options.master = false;
+    // A whitespace-only master (with its DATA size record) sandwiched between two real masters, so the test
+    // also pins that DATA attribution stays paired with the surviving entries.
+    options.masters = { { "First.esm", 111 }, { " ", 999 }, { "Second.esm", 222 } };
+    writeInDir(dir, "WhitespaceMast.esp", buildPlugin(options));
+
+    const std::filesystem::path path = dir / "WhitespaceMast.esp";
+    ESM4::Reader reader(Files::openBinaryInputFileStream(path), path, /*vfs=*/nullptr, /*encoder=*/nullptr);
+
+    ASSERT_EQ(reader.getGameFiles().size(), 2u);
+    EXPECT_EQ(reader.getGameFiles()[0].name, "First.esm");
+    EXPECT_EQ(reader.getGameFiles()[0].size, 111u);
+    EXPECT_EQ(reader.getGameFiles()[1].name, "Second.esm");
+    EXPECT_EQ(reader.getGameFiles()[1].size, 222u);
+
+    // With the whitespace entry dropped from mHeader.mMaster, resolving dependencies must succeed.
+    const std::map<std::string, int> fileToModIndex{ { "first.esm", 0 }, { "second.esm", 1 } };
+    EXPECT_NO_THROW(reader.updateModIndices(fileToModIndex));
 }
 
 TEST(OblivionLoading, wrongLoadOrderIsAWarningByDefaultAndAnErrorInStrictMode)

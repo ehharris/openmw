@@ -32,9 +32,16 @@
 #include "reader.hpp"
 //#include "writer.hpp"
 
+#include <components/misc/strings/algorithm.hpp>
+
 void ESM4::Header::load(ESM4::Reader& reader)
 {
     mFlags = reader.hdr().record.flags; // 0x01 = Rec_ESM, 0x80 = Rec_Localized
+
+    // Set when a whitespace-only master entry was skipped: the DATA size record following it
+    // belongs to that entry and must not be attributed to the preceding master. Mirrors the
+    // validation parser in components/files/oblivion/esm.cpp so both parsers agree.
+    bool ignoreNextMasterSize = false;
 
     while (reader.getSubRecordHeader())
     {
@@ -63,13 +70,30 @@ void ESM4::Header::load(ESM4::Reader& reader)
                 if (!reader.getZString(m.name))
                     throw std::runtime_error("TES4 MAST data read error");
 
+                Misc::StringUtils::trim(m.name);
+                if (m.name.empty())
+                {
+                    // Some files (the vanilla Oblivion.esm quirk handled by the validation parser) carry a
+                    // master entry whose name is only whitespace. Ignore it, together with its DATA size
+                    // record, so that ESM4::Reader::updateModIndices never treats " " as a missing dependency.
+                    ignoreNextMasterSize = true;
+                    break;
+                }
+
                 // NOTE: some mods do not have DATA following MAST so can't read DATA here
                 m.size = 0;
                 mMaster.push_back(std::move(m));
+                ignoreNextMasterSize = false;
                 break;
             }
             case ESM::fourCC("DATA"):
             {
+                if (ignoreNextMasterSize)
+                {
+                    ignoreNextMasterSize = false; // size record of the ignored master entry
+                    reader.skipSubRecordData();
+                    break;
+                }
                 if (mMaster.empty())
                     throw std::runtime_error(
                         "Failed to read TES4 DATA subrecord: there is no preceding MAST subrecord");
