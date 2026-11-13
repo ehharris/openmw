@@ -88,7 +88,11 @@ namespace
         auto it = classes.begin();
         if (it != classes.end())
             return it->mId;
-        throw std::runtime_error("List of NPC classes is empty!");
+        // TES4-family content provides no Morrowind-dialect NPC classes (NPCS). An empty fallback leaves the NPC's
+        // class unpatched, which is correct for converted records. Vanilla Morrowind always ships classes, so this
+        // path is never taken there.
+        static const ESM::RefId sEmpty;
+        return sEmpty;
     }
 
     const ESM::RefId& getDefaultRace(const MWWorld::Store<ESM::Race>& races)
@@ -96,7 +100,9 @@ namespace
         auto it = races.begin();
         if (it != races.end())
             return it->mId;
-        throw std::runtime_error("List of NPC races is empty!");
+        // See getDefaultClass: TES4-family content may provide no Morrowind-dialect races either.
+        static const ESM::RefId sEmpty;
+        return sEmpty;
     }
 
     std::vector<ESM::NPC> getNPCsToReplace(const MWWorld::Store<ESM::Faction>& factions,
