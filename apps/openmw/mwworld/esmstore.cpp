@@ -560,7 +560,11 @@ namespace MWWorld
         mIsSetUpDone = true;
 
         if (!hasTES3Content())
+        {
             seedTES4DefaultGameSettings(*this);
+            seedTES4DefaultSkills(*this);
+            seedTES4DefaultPlayer(*this);
+        }
 
         for (const auto& [_, store] : mStoreImp->mRecNameToStore)
             store->setUp();
