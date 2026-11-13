@@ -24,6 +24,8 @@
 
 #include "../mwmechanics/spelllist.hpp"
 
+#include "tes4defaults.hpp"
+
 namespace
 {
     struct Ref
@@ -550,6 +552,9 @@ namespace MWWorld
         if (mIsSetUpDone)
             throw std::logic_error("ESMStore::setUp() is called twice");
         mIsSetUpDone = true;
+
+        if (!hasTES3Content())
+            seedTES4DefaultGameSettings(*this);
 
         for (const auto& [_, store] : mStoreImp->mRecNameToStore)
             store->setUp();
