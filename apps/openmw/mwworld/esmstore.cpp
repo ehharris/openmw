@@ -541,6 +541,7 @@ namespace MWWorld
                 cfg.mScripts.insert(cfg.mScripts.end(), addition.mScripts.begin(), addition.mScripts.end());
             }
         }
+        LuaUtil::filterMorrowindOnlyScripts(cfg, hasTES3Content());
         return cfg;
     }
 

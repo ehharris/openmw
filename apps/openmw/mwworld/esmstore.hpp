@@ -195,11 +195,19 @@ namespace MWWorld
             std::filesystem::path>; // path to an omwscripts file
         std::vector<LuaContent> mLuaContent;
 
+        bool mHasTES3Content = false;
+
         bool mIsSetUpDone = false;
 
     public:
         void addOMWScripts(std::filesystem::path filePath) { mLuaContent.push_back(std::move(filePath)); }
         ESM::LuaScriptsCfg getLuaScriptsCfg() const;
+
+        /// Called when a TES3 (Morrowind dialect) content file has been loaded successfully.
+        void noteTES3ContentLoaded() { mHasTES3Content = true; }
+
+        /// Whether any TES3 (Morrowind dialect) content was loaded.
+        bool hasTES3Content() const { return mHasTES3Content; }
 
         /// \todo replace with SharedIterator<StoreBase>
         typedef std::vector<DynamicStore*>::const_iterator iterator;

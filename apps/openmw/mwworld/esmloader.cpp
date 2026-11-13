@@ -60,6 +60,7 @@ namespace MWWorld
 
                 mGameFormats[index] = ESM::getGameFormat(reader->getVer(), std::nullopt);
                 mStore.load(*reader, listener, mDialogue);
+                mStore.noteTES3ContentLoaded();
 
                 if (!mMasterFileFormat.has_value()
                     && (Misc::StringUtils::ciEndsWith(reader->getName().u8string(), u8".esm")

@@ -1,6 +1,7 @@
 #include "configuration.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bitset>
 #include <cassert>
 #include <format>
@@ -48,6 +49,25 @@ namespace LuaUtil
         {
             return std::isspace(static_cast<unsigned char>(c));
         }
+
+        // Morrowind-dialect Lua scripts appended to builtin.omwscripts by files/data-mw/builtin.omwscripts.in.
+        // They assume the TES3 record layout (e.g. Morrowind skill names), so they must not be started when only
+        // TES4 (Oblivion) content is loaded. Paths are normalized: lower-case with '/' separators.
+        constexpr std::array<std::string_view, 12> morrowindOnlyScripts = { "scripts/omw/cellhandlers.lua",
+            "scripts/omw/combat/global.lua", "scripts/omw/combat/local.lua", "scripts/omw/combat/settingspage.lua",
+            "scripts/omw/music/music.lua", "scripts/omw/music/settings.lua", "scripts/omw/playerskillhandlers.lua",
+            "scripts/omw/esmfallbacks.lua", "scripts/omw/spellcasting/local.lua",
+            "scripts/omw/spellcasting/lockable.lua", "scripts/omw/spellcasting/global.lua", "scripts/omw/weather.lua" };
+    }
+
+    void filterMorrowindOnlyScripts(ESM::LuaScriptsCfg& cfg, bool hasTES3Content)
+    {
+        if (hasTES3Content)
+            return;
+        std::erase_if(cfg.mScripts, [](const ESM::LuaScriptCfg& script) {
+            return std::find(morrowindOnlyScripts.begin(), morrowindOnlyScripts.end(), script.mScriptPath.view())
+                != morrowindOnlyScripts.end();
+        });
     }
 
     void ScriptsConfiguration::init(ESM::LuaScriptsCfg cfg, bool remap)
