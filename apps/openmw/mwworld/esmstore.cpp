@@ -697,7 +697,12 @@ namespace MWWorld
     void ESMStore::movePlayerRecord()
     {
         auto& npcs = getWritable<ESM::NPC>();
-        auto player = npcs.find(ESM::RefId::stringRefId("Player"));
+        const ESM::NPC* player = npcs.search(ESM::RefId::stringRefId("Player"));
+        if (player == nullptr)
+            // TES4-family content may not provide a usable Morrowind-dialect "Player" record (vanilla Oblivion marks
+            // its player base object as invalid, so it is not loaded). Starting a game requires one; world
+            // initialisation does not.
+            return;
         npcs.insert(*player);
     }
 
