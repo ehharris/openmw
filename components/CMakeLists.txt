@@ -201,6 +201,7 @@ add_component_dir (esm4
     actor
     cellgrid
     common
+    convertglob
     dialogue
     effect
     grid

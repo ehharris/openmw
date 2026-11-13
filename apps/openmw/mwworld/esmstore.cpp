@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <fstream>
+#include <optional>
+#include <set>
 #include <tuple>
 
 #include <components/debug/debuglog.hpp>
@@ -11,6 +13,8 @@
 #include <components/esm3/esmwriter.hpp>
 #include <components/esm3/readerscache.hpp>
 #include <components/esm4/common.hpp>
+#include <components/esm4/convertglob.hpp>
+#include <components/esm4/loadglob.hpp>
 #include <components/esm4/reader.hpp>
 #include <components/esm4/readerutils.hpp>
 #include <components/esmloader/load.hpp>
@@ -270,6 +274,29 @@ namespace MWWorld
             auto recordType = static_cast<ESM4::RecordTypes>(reader.hdr().record.typeId);
 
             ESM::RecNameInts esm4RecName = static_cast<ESM::RecNameInts>(ESM::esm4Recname(recordType));
+
+            // TES4 GLOB records are bridged into the esm3 Global store instead of getting their own ESM4 store.
+            if constexpr (std::is_same_v<T, ESM::Global>)
+            {
+                if (recordType == ESM4::REC_GLOB)
+                {
+                    reader.getRecordData();
+                    ESM4::GlobalVariable glob;
+                    glob.load(reader);
+                    if (auto converted = ESM4::convertToESM3(glob))
+                        store.insertStatic(*converted);
+                    else
+                    {
+                        // Warn once per unrecognised FNAM type to avoid spamming the log.
+                        static std::set<std::uint8_t> warnedTypes;
+                        if (warnedTypes.insert(glob.mType).second)
+                            Log(Debug::Warning) << "Skipping ESM4 GLOB '" << glob.mEditorId
+                                                << "' with unsupported type '" << static_cast<char>(glob.mType) << "'";
+                    }
+                    return true;
+                }
+            }
+
             if constexpr (HasRecordId<T>)
             {
                 if constexpr (ESM::isESM4Rec(T::sRecordId))

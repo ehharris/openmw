@@ -82,6 +82,7 @@ file(GLOB UNITTEST_SRC_FILES
     esm3/testcstringids.cpp
 
     files/oblivion/test_esm.cpp
+    files/oblivion/test_convertglob.cpp
     files/oblivion/test_bsa.cpp
 
     # The Oblivion content loader test lives at the path requested by the task brief; it is
