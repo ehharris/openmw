@@ -89,7 +89,21 @@ cmake --build build --target components-tests
 ```
 
 The tests are self-contained: they synthesise small Oblivion plugin and BSA files in a
-temporary directory, so they do **not** require game data. They cover:
+temporary directory, so they do **not** require game data, with one exception — the
+`OblivionRealData` suite (`apps/components_tests/files/oblivion/test_oblivion_realdata.cpp`)
+runs against your real game files and is **skipped unless you set the environment variable
+`OPENMW_TEST_OBLIVION_DATA`** to the path of your Oblivion `Data` directory:
+
+```sh
+OPENMW_TEST_OBLIVION_DATA="/path/to/Oblivion/Data" \
+    ./build/components-tests --gtest_filter='OblivionRealData.*'
+```
+
+It parses the real `Oblivion.esm` through the TES4 reader, validates its masters and opens
+all official BSAs. The game data is only read, never modified; without the variable set the
+three tests report as `SKIPPED`, which is the expected result on machines without the game.
+
+The self-contained tests cover:
 
 * the Oblivion ESM parser (`test_esm.cpp`),
 * the Oblivion BSA reader (`test_bsa.cpp`),
@@ -269,6 +283,35 @@ is produced by the ESM4 reader itself.
 3. `ESMStore::loadESM4` reads the records into the store, exactly as for the other
    TES4-family games.
 
+### Runtime defaults for TES4-only sessions (`tes4defaults`)
+
+The running engine is still the Morrowind runtime: large parts of it dereference
+Morrowind-dialect records (globals, game settings, skills, races, the `Player` NPC) that
+Oblivion content does not provide. When a session contains **no TES3 content at all**
+(`ESMStore::hasTES3Content()` is false), `ESMStore::setUp()` seeds the mandatory vocabulary
+via `apps/openmw/mwworld/tes4defaults.{hpp,cpp}`:
+
+* **Globals** — `World::ensureNeededRecords()` runs for TES4-only sessions too (the same
+  mandatory set vanilla OpenMW inserts for old Morrowind masters: `dayspassed`, `gamehour`,
+  `timescale`, …).
+* **Game settings** — the full vanilla GMST vocabulary (258 float + 89 int + 1174 string
+  names, generated from `apps/opencs/model/world/defaultgmsts.cpp`; see
+  `tes4defaults_gmsts.hpp`) plus every `openmw.cfg` fallback entry (`FontColor_*`,
+  `Movies_*`, …) mirrored into the GMST store so Lua UI scripts resolve them. String GMSTs
+  are seeded empty (UI text will be blank until content provides it). Only records missing
+  from the store are inserted — real content always wins.
+* **Skills** — the 27 Morrowind skill records (`SKIL`), which `NpcStats` and the Lua
+  mechanics scripts iterate unconditionally. Oblivion's own `SKIL` records are *not*
+  bridged into this store.
+* **Player and race** — a minimal synthetic `Player` NPC with a synthetic race
+  (`playerrace`). Vanilla Oblivion's player base object exists but is flagged invalid (and
+  NPCE records have no esm3 conversion), so without the seed the engine aborts in
+  `World::setupPlayer()`. The seeded actor has no usable meshes; starting an actual game
+  additionally fails on missing Morrowind body meshes (see Limitations).
+
+Mixed TES3+TES4 sessions are not seeded at all — the Morrowind content provides the
+vocabulary.
+
 ### BSA archives
 
 Oblivion ships its data in BSA archives with the version word `0x67` (103). Version 103 is
@@ -338,8 +381,17 @@ Oblivion support is experimental. The following limitations apply:
 ### Scope of support
 
 * **Not a finished Oblivion port.** There is no guarantee that any given Oblivion world,
-  quest, script or mod will work. The engine may start, load content and reach a game,
-  but large parts of the experience are unimplemented or broken.
+  quest, script or mod will work. What works today, verified against vanilla
+  `Oblivion.esm` + the five official BSAs (headless Xvfb/llvmpipe): the startup content
+  check passes, all archives mount, the plugin streams into the store, world initialisation
+  completes and the engine reaches the Lua main menu and stays there stably (no fatal
+  errors). The UI renders with magenta error textures because Morrowind interface art is
+  not present in Oblivion archives. Choosing New Game fails at the character preview
+  (`Failed to start new game: Resource 'meshes/base_anim.nif' not found`); the engine logs
+  the failure and remains running. Gameplay beyond that point is unimplemented.
+* **No Morrowind-dialect actor vocabulary.** Oblivion `NPC_`/`CREA`/`RACE`/`NPCS` records are
+  parsed by the TES4 reader but have no esm3 conversion: the Morrowind-side stores see only
+  the synthetic `Player`/`playerrace` seeds (see "Runtime defaults for TES4-only sessions").
 * **Scripts are not executed.** The engine's scripting system is Morrowind's mwscript;
   Oblivion's SCPT records are parsed but never run. Quests, triggers, menus and dialogue
   driven by scripts will not function.
@@ -395,7 +447,15 @@ Oblivion support is experimental. The following limitations apply:
   Oblivion archives through the generic TES4-family reader; it does not use the dedicated
   Oblivion BSA reader. Archive *creation* or *modification* is not supported anywhere.
 * **esmtool is TES4-family aware, not Oblivion specific.** It can inspect Oblivion files
-  as generic TES4-family records but has no Oblivion validation pass.
+  as generic TES4-family records but has no Oblivion validation pass. Verified against
+  `Oblivion.esm`: `esmtool dump [-t <RECORD>] [-q] Oblivion.esm` completes cleanly; note
+  that record-type filtering uses the TES4 four-character codes (`-t NPCE`, not `-t NPC`).
+* **Headless launches on a machine without audio input/output or a window manager** work,
+  but if the engine throws during startup while stdin is not a terminal it pops a modal
+  SDL error dialog that blocks forever with nobody to dismiss it (the real error message is
+  only logged *after* the dialog). When debugging headless runs, give the process a pty
+  (e.g. `python3 -c "import pty; pty.spawn(['./build/openmw'])"`), or check for an
+  unresponsive `openmw` child process holding the log.
 
 ### Content loading
 
