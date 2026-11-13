@@ -155,7 +155,8 @@ namespace MWWorld
     }
 
     void seedTES4DefaultPlayer(ESMStore& store)
-    {        Store<ESM::Race>& races = store.getWritable<ESM::Race>();
+    {
+        Store<ESM::Race>& races = store.getWritable<ESM::Race>();
         const ESM::RefId raceId = ESM::RefId::stringRefId("playerrace");
         if (races.search(raceId) == nullptr)
         {
